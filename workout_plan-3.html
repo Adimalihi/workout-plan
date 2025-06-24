@@ -1,0 +1,382 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Block Periodized Workout Plan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .hidden { display: none; }
+        .exercise-row { 
+            display: grid; 
+            grid-template-columns: 200px 100px 100px 100px 100px 100px 30px; 
+            gap: 10px; 
+            margin-bottom: 10px; 
+        }
+        .exercise-row input { 
+            width: 100%; 
+            box-sizing: border-box; 
+            padding: 0.5rem; 
+        }
+        .milestones { margin-top: 15px; }
+        .phase-box { 
+            border: 1px solid #ddd; 
+            padding: 15px; 
+            margin-bottom: 20px; 
+            border-radius: 5px; 
+            max-width: 100%; 
+            overflow-x: auto; 
+        }
+        @media print {
+            .no-print { display: none; }
+            .print-only { display: block; }
+            body { font-size: 10pt; margin: 0.5in; }
+            .container { padding: 0; }
+            .phase-box { border: none; page-break-inside: avoid; }
+            .milestones p { white-space: pre-wrap; border: 1px solid #ddd; padding: 10px; border-radius: 5px; }
+            table { width: 100%; }
+            td, th { padding: 5px; border: 1px solid #ddd; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto p-8 bg-white shadow-md max-w-4xl">
+        <header class="flex justify-between items-center border-b pb-4 mb-6">
+            <div>
+                <h1 class="text-2xl font-bold">Block Periodized Workout Plan</h1>
+                <p class="text-sm text-gray-600">Prepared by Adi Malihi</p>
+            </div>
+            <img src="https://via.placeholder.com/80x40?text=Logo" alt="Logo" class="h-10">
+        </header>
+
+        <!-- Form Section -->
+        <section class="no-print mb-8">
+            <h2 class="text-xl font-semibold mb-4">Create Your Plan</h2>
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium">Client Name</label>
+                        <input type="text" id="clientName" class="mt-1 p-2 w-full border rounded" placeholder="e.g., John Doe" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium">Goal</label>
+                        <textarea id="clientGoal" class="mt-1 p-2 w-full border rounded" rows="3" placeholder="e.g., Build strength, improve endurance, etc."></textarea>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium">Training Days</label>
+                    <div class="grid grid-cols-7 gap-2 mt-1">
+                        <label><input type="checkbox" name="days" value="Mon"> Mon</label>
+                        <label><input type="checkbox" name="days" value="Tue"> Tue</label>
+                        <label><input type="checkbox" name="days" value="Wed"> Wed</label>
+                        <label><input type="checkbox" name="days" value="Thu"> Thu</label>
+                        <label><input type="checkbox" name="days" value="Fri"> Fri</label>
+                        <label><input type="checkbox" name="days" value="Sat"> Sat</label>
+                        <label><input type="checkbox" name="days" value="Sun"> Sun</label>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium">Foundation Weeks</label>
+                        <input type="number" id="foundationWeeks" class="mt-1 p-2 w-full border rounded" min="1" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium">Evolution Weeks</label>
+                        <input type="number" id="evolutionWeeks" class="mt-1 p-2 w-full border rounded" min="1" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium">Mastery Weeks</label>
+                        <input type="number" id="masteryWeeks" class="mt-1 p-2 w-full border rounded" min="1" required>
+                    </div>
+                </div>
+
+                <!-- Phases -->
+                <div class="phase-box">
+                    <h3 class="text-lg font-medium">Foundation Phase</h3>
+<textarea class="mt-1 p-2 w-full border rounded-md" rows="2" id="foundationDescription">Build a solid fitness base with foundational strength and flexibility.</textarea>
+                    <div id="foundationExercises" class="mt-2"></div>
+                    <button type="button" class="add-exercise text-blue-600 mt-2" data-phase="foundation">+ Add Exercise</button>
+                    <div class="milestones">
+                        <label class="block text-sm font-medium">Results & Key Milestones</label>
+                        <textarea id="foundationMilestones" class="mt-1 p-2 w-full border rounded" rows="3" placeholder="e.g., Increased stamina"></textarea>
+                    </div>
+                </div>
+                <div class="phase-box">
+    <h3 class="text-lg font-medium">Evolution Phase</h3>
+    <textarea class="mt-1 p-2 w-full border rounded-md" rows="2" id="evolutionDescription">Advance strength and endurance through progressive overload.</textarea>
+    <div id="evolutionExercises" class="mt-2"></div>
+    <button type="button" class="add-exercise text-blue-600 mt-2" data-phase="evolution">+ Add Exercise</button>
+    <div class="milestones">
+        <label class="block text-sm font-medium">Results & Key Milestones</label>
+        <textarea id="evolutionMilestones" class="mt-1 p-2 w-full border rounded" rows="3" placeholder="e.g., Improved strength"></textarea>
+    </div>
+</div>
+                <div class="phase-box">
+    <h3 class="text-lg font-medium">Mastery Phase</h3>
+    <textarea class="mt-1 p-2 w-full border rounded-md" rows="2" id="masteryDescription">Optimize performance and achieve peak fitness goals.</textarea>
+    <div id="masteryExercises" class="mt-2"></div>
+    <button type="button" class="add-exercise text-blue-600 mt-2" data-phase="mastery">+ Add Exercise</button>
+    <div class="milestones">
+        <label class="block text-sm font-medium">Results & Key Milestones</label>
+        <textarea id="masteryMilestones" class="mt-1 p-2 w-full border rounded" rows="3" placeholder="e.g., Peak performance"></textarea>
+    </div>
+</div>
+
+                <div class="flex gap-4 mt-4">
+                    <button type="button" id="previewBtn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Preview Plan</button>
+                    <button type="button" id="saveBtn" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Save Plan</button>
+                    <button type="button" id="loadBtn" class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">Load Plan</button>
+                    <input type="file" id="uploadPlan" accept=".json" style="display:none;">
+                </div>
+            </div>
+        </section>
+
+        <!-- Output Section -->
+        <section id="planOutput" class="print-only hidden">
+            <h2 class="text-xl font-semibold mb-4">Workout Plan for <span id="outClientName"></span></h2>
+            <p><strong>Goal:</strong> <span id="outGoal"></span></p>
+            <p><strong>Total Weeks:</strong> <span id="outTotalWeeks"></span></p>
+            <p><strong>Training Days:</strong> <span id="outDays"></span></p>
+            <div id="outPhases" class="mt-6"></div>
+            <button id="printBtn" class="no-print bg-gray-200 px-4 py-2 rounded mt-4" onclick="window.print()">Print Plan</button>
+        </section>
+
+        <footer class="mt-8 border-t pt-4 text-center text-sm text-gray-600">
+            <p>Contact: adi@malihi.ca | Generated by Adi Malihi</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const phases = ['foundation', 'evolution', 'mastery'];
+
+            // Add Exercise
+            document.querySelectorAll('.add-exercise').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const phase = btn.dataset.phase;
+                    const container = document.getElementById(`${phase}Exercises`);
+                    const row = document.createElement('div');
+                    row.className = 'exercise-row';
+                    row.innerHTML = `
+                        <input type="text" class="p-2 border rounded" placeholder="Exercise" required>
+                        <input type="number" class="p-2 border rounded" placeholder="Sets" min="1">
+                        <input type="text" class="p-2 border rounded" placeholder="Reps">
+                        <input type="text" class="p-2 border rounded" placeholder="RIR">
+                        <input type="text" class="p-2 border rounded" placeholder="RPE">
+                        <input type="text" class="p-2 border rounded" placeholder="Rest">
+                        <button type="button" class="remove-exercise text-red-600">×</button>
+                    `;
+                    container.appendChild(row);
+                });
+            });
+
+            // Remove Exercise
+            document.addEventListener('click', (e) => {
+                if (e.target.classList.contains('remove-exercise')) {
+                    e.target.parentElement.remove();
+                }
+            });
+
+            // Get Plan Data
+            function getPlanData() {
+                const clientName = document.getElementById('clientName').value.trim();
+                const goal = document.getElementById('clientGoal').value.trim();
+                const trainingDays = Array.from(document.querySelectorAll('input[name="days"]:checked')).map(cb => cb.value);
+                const phasesData = {};
+                phases.forEach(phase => {
+                    const weeks = parseInt(document.getElementById(`${phase}Weeks`).value) || 0;
+                    const exercises = Array.from(document.querySelectorAll(`#${phase}Exercises .exercise-row`)).map(row => {
+                        const inputs = row.querySelectorAll('input');
+                        return {
+                            name: inputs[0].value.trim(),
+                            sets: inputs[1].value.trim(),
+                            reps: inputs[2].value.trim(),
+                            rir: inputs[3].value.trim(),
+                            rpe: inputs[4].value.trim(),
+                            rest: inputs[5].value.trim()
+                        };
+                    }).filter(ex => ex.name);
+                    const milestones = document.getElementById(`${phase}Milestones`).value.trim();
+                   if (exercises.length > 0 && weeks > 0) {
+    phasesData[phase] = {
+        weeks,
+        exercises,
+        milestones,
+        description: document.getElementById(`${phase}Description`).value.trim()
+    };
+}
+                });
+                return { clientName, goal, trainingDays, phases: phasesData };
+            }
+
+            // Preview Plan
+            document.getElementById('previewBtn').addEventListener('click', () => {
+                const plan = getPlanData();
+                if (!plan.clientName || !plan.goal || plan.trainingDays.length < 1 || Object.keys(plan.phases).length === 0) {
+                    alert('Please fill all required fields and add at least one exercise with weeks.');
+                    return;
+                }
+                const totalWeeks = Object.values(plan.phases).reduce((sum, p) => sum + p.weeks, 0);
+                document.getElementById('outClientName').textContent = plan.clientName;
+                document.getElementById('outGoal').textContent = plan.goal;
+                document.getElementById('outTotalWeeks').textContent = totalWeeks;
+                document.getElementById('outDays').textContent = plan.trainingDays.join(', ');
+                const outPhases = document.getElementById('outPhases');
+                outPhases.innerHTML = '';
+                let weekStart = 1;
+                for (const phase in plan.phases) {
+                    const p = plan.phases[phase];
+                    const phaseDiv = document.createElement('div');
+                    phaseDiv.className = 'phase-box';
+                    const weekRange = `Weeks ${weekStart}-${weekStart + p.weeks - 1}`;
+                   phaseDiv.innerHTML = `
+    <h3 class="text-lg font-medium">${phase.charAt(0).toUpperCase() + phase.slice(1)} Phase (${weekRange})</h3>
+    ${p.description ? `<p><strong>Description:</strong> ${p.description}</p>` : ''}
+    <p><strong>Training Days:</strong> ${plan.trainingDays.join(', ')}</p>
+    <table class="w-full border-collapse mt-2">
+                            <thead>
+                                <tr class="bg-blue-100">
+                                    <th class="p-2 border">Exercise</th>
+                                    <th class="p-2 border">Sets</th>
+                                    <th class="p-2 border">Reps</th>
+                                    <th class="p-2 border">RIR</th>
+                                    <th class="p-2 border">RPE</th>
+                                    <th class="p-2 border">Rest</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${p.exercises.map(ex => `
+                                    <tr>
+                                        <td class="p-2 border">${ex.name}</td>
+                                        <td class="p-2 border text-center">${ex.sets}</td>
+                                        <td class="p-2 border text-center">${ex.reps}</td>
+                                        <td class="p-2 border text-center">${ex.rir}</td>
+                                        <td class="p-2 border text-center">${ex.rpe}</td>
+                                        <td class="p-2 border text-center">${ex.rest}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        <div class="milestones">
+                            <label class="block text-sm font-medium mt-4">Results & Key Milestones</label>
+                            <p>${p.milestones || 'No milestones set'}</p>
+                        </div>
+                    `;
+                    outPhases.appendChild(phaseDiv);
+                    weekStart += p.weeks;
+                }
+                document.getElementById('planOutput').classList.remove('hidden');
+            });
+
+            // Save Plan
+            document.getElementById('saveBtn').addEventListener('click', () => {
+                const plan = getPlanData();
+                if (!plan.clientName || !plan.goal || plan.trainingDays.length < 1 || Object.keys(plan.phases).length === 0) {
+                    alert('Please fill all required fields before saving.');
+                    return;
+                }
+                const jsonStr = JSON.stringify(plan, null, 2);
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `workout_plan_${plan.clientName.replace(/\s/g, '_')}_${new Date().toISOString().slice(0, 10)}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+
+        document.getElementById('loadBtn').addEventListener('click', () => {
+        document.getElementById('uploadPlan').click();
+    });
+
+    document.getElementById('uploadPlan').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const plan = JSON.parse(event.target.result);
+                    document.getElementById('clientName').value = plan.clientName || '';
+                    document.getElementById('clientGoal').value = plan.goal || '';
+                    document.querySelectorAll('input[name="days"]').forEach(cb => {
+                        cb.checked = plan.trainingDays && plan.trainingDays.includes(cb.value);
+                    });
+                    phases.forEach(phase => {
+                        const phaseData = plan.phases && plan.phases[phase];
+                        document.getElementById(`${phase}Weeks`).value = phaseData ? phaseData.weeks || '' : '';
+                        const container = document.getElementById(`${phase}Exercises`);
+                        container.innerHTML = '';
+                        if (phaseData && phaseData.exercises) {
+                            phaseData.exercises.forEach(ex => {
+                                const row = document.createElement('div');
+                                row.className = 'exercise-row';
+                                row.innerHTML = `
+                                    <input type="text" class="p-2 border rounded" value="${ex.name || ''}" required>
+                                    <input type="number" class="p-2 border rounded" value="${ex.sets || ''}" min="1">
+                                    <input type="text" class="p-2 border rounded" value="${ex.reps || ''}">
+                                    <input type="text" class="p-2 border rounded" value="${ex.rir || ''}">
+                                    <input type="text" class="p-2 border rounded" value="${ex.rpe || ''}">
+                                    <input type="text" class="p-2 border rounded" value="${ex.rest || ''}">
+                                    <button type="button" class="remove-exercise text-red-600">×</button>
+                                `;
+                                container.appendChild(row);
+                            });
+                        }
+                        document.getElementById(`${phase}Milestones`).value = phaseData ? phaseData.milestones || '' : '';
+                    });
+                    phases.forEach(phase => {
+    if (plan.phases && plan.phases[phase] && plan.phases[phase].description) {
+        document.getElementById(`${phase}Description`).value = plan.phases[phase].description;
+    }
+});
+                } catch (error) {
+                    alert('Invalid plan file. Please upload a valid JSON file.');
+                }
+            };
+            reader.readAsText(file);
+        }
+    });
+});
+    </script>
+</body>
+</html>
