@@ -1,382 +1,274 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Block Periodized Workout Plan</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Workout Tracker App</title>
     <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background-color: #f4f4f4; }
+        h1, h2 { text-align: center; }
+        .day-selector { display: flex; justify-content: space-around; flex-wrap: wrap; margin-bottom: 20px; }
+        .day-button { padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
+        .day-button.active { background-color: #0056b3; }
+        .exercise { background-color: white; padding: 15px; margin-bottom: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .exercise h3 { margin-top: 0; }
+        .sets { margin-top: 10px; }
+        .set { display: flex; align-items: center; margin-bottom: 10px; }
+        .set input { width: 60px; margin-right: 10px; padding: 5px; }
+        .set button { padding: 5px 10px; background-color: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        .set button.done { background-color: #6c757d; }
+        .add-set { background-color: #ffc107; color: black; }
+        .timer { margin-left: 10px; }
+        .timer button { background-color: #17a2b8; color: white; }
+        .export { text-align: center; margin-top: 20px; }
+        .export button { padding: 10px 20px; background-color: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        textarea { width: 100%; height: 200px; margin-top: 10px; }
         .hidden { display: none; }
-        .exercise-row { 
-            display: grid; 
-            grid-template-columns: 200px 100px 100px 100px 100px 100px 30px; 
-            gap: 10px; 
-            margin-bottom: 10px; 
-        }
-        .exercise-row input { 
-            width: 100%; 
-            box-sizing: border-box; 
-            padding: 0.5rem; 
-        }
-        .milestones { margin-top: 15px; }
-        .phase-box { 
-            border: 1px solid #ddd; 
-            padding: 15px; 
-            margin-bottom: 20px; 
-            border-radius: 5px; 
-            max-width: 100%; 
-            overflow-x: auto; 
-        }
-        @media print {
-            .no-print { display: none; }
-            .print-only { display: block; }
-            body { font-size: 10pt; margin: 0.5in; }
-            .container { padding: 0; }
-            .phase-box { border: none; page-break-inside: avoid; }
-            .milestones p { white-space: pre-wrap; border: 1px solid #ddd; padding: 10px; border-radius: 5px; }
-            table { width: 100%; }
-            td, th { padding: 5px; border: 1px solid #ddd; }
-        }
     </style>
 </head>
-<body class="bg-gray-50">
-    <div class="container mx-auto p-8 bg-white shadow-md max-w-4xl">
-        <header class="flex justify-between items-center border-b pb-4 mb-6">
-            <div>
-                <h1 class="text-2xl font-bold">Block Periodized Workout Plan</h1>
-                <p class="text-sm text-gray-600">Prepared by Adi Malihi</p>
-            </div>
-            <img src="https://via.placeholder.com/80x40?text=Logo" alt="Logo" class="h-10">
-        </header>
-
-        <!-- Form Section -->
-        <section class="no-print mb-8">
-            <h2 class="text-xl font-semibold mb-4">Create Your Plan</h2>
-            <div class="space-y-4">
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium">Client Name</label>
-                        <input type="text" id="clientName" class="mt-1 p-2 w-full border rounded" placeholder="e.g., John Doe" required>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium">Goal</label>
-                        <textarea id="clientGoal" class="mt-1 p-2 w-full border rounded" rows="3" placeholder="e.g., Build strength, improve endurance, etc."></textarea>
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium">Training Days</label>
-                    <div class="grid grid-cols-7 gap-2 mt-1">
-                        <label><input type="checkbox" name="days" value="Mon"> Mon</label>
-                        <label><input type="checkbox" name="days" value="Tue"> Tue</label>
-                        <label><input type="checkbox" name="days" value="Wed"> Wed</label>
-                        <label><input type="checkbox" name="days" value="Thu"> Thu</label>
-                        <label><input type="checkbox" name="days" value="Fri"> Fri</label>
-                        <label><input type="checkbox" name="days" value="Sat"> Sat</label>
-                        <label><input type="checkbox" name="days" value="Sun"> Sun</label>
-                    </div>
-                </div>
-                <div class="grid grid-cols-3 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium">Foundation Weeks</label>
-                        <input type="number" id="foundationWeeks" class="mt-1 p-2 w-full border rounded" min="1" required>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium">Evolution Weeks</label>
-                        <input type="number" id="evolutionWeeks" class="mt-1 p-2 w-full border rounded" min="1" required>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium">Mastery Weeks</label>
-                        <input type="number" id="masteryWeeks" class="mt-1 p-2 w-full border rounded" min="1" required>
-                    </div>
-                </div>
-
-                <!-- Phases -->
-                <div class="phase-box">
-                    <h3 class="text-lg font-medium">Foundation Phase</h3>
-<textarea class="mt-1 p-2 w-full border rounded-md" rows="2" id="foundationDescription">Build a solid fitness base with foundational strength and flexibility.</textarea>
-                    <div id="foundationExercises" class="mt-2"></div>
-                    <button type="button" class="add-exercise text-blue-600 mt-2" data-phase="foundation">+ Add Exercise</button>
-                    <div class="milestones">
-                        <label class="block text-sm font-medium">Results & Key Milestones</label>
-                        <textarea id="foundationMilestones" class="mt-1 p-2 w-full border rounded" rows="3" placeholder="e.g., Increased stamina"></textarea>
-                    </div>
-                </div>
-                <div class="phase-box">
-    <h3 class="text-lg font-medium">Evolution Phase</h3>
-    <textarea class="mt-1 p-2 w-full border rounded-md" rows="2" id="evolutionDescription">Advance strength and endurance through progressive overload.</textarea>
-    <div id="evolutionExercises" class="mt-2"></div>
-    <button type="button" class="add-exercise text-blue-600 mt-2" data-phase="evolution">+ Add Exercise</button>
-    <div class="milestones">
-        <label class="block text-sm font-medium">Results & Key Milestones</label>
-        <textarea id="evolutionMilestones" class="mt-1 p-2 w-full border rounded" rows="3" placeholder="e.g., Improved strength"></textarea>
+<body>
+    <h1>Workout Tracker</h1>
+    <div class="day-selector">
+        <button class="day-button" data-day="monday">Monday: Upper</button>
+        <button class="day-button" data-day="tuesday">Tuesday: Lower</button>
+        <button class="day-button" data-day="wednesday">Wednesday: Push</button>
+        <button class="day-button" data-day="thursday">Thursday: Pull</button>
+        <button class="day-button" data-day="friday">Friday: Legs</button>
+        <button class="day-button" data-day="saturday">Saturday: Murph</button>
+        <button class="day-button" data-day="sunday">Sunday: 5k Run</button>
     </div>
-</div>
-                <div class="phase-box">
-    <h3 class="text-lg font-medium">Mastery Phase</h3>
-    <textarea class="mt-1 p-2 w-full border rounded-md" rows="2" id="masteryDescription">Optimize performance and achieve peak fitness goals.</textarea>
-    <div id="masteryExercises" class="mt-2"></div>
-    <button type="button" class="add-exercise text-blue-600 mt-2" data-phase="mastery">+ Add Exercise</button>
-    <div class="milestones">
-        <label class="block text-sm font-medium">Results & Key Milestones</label>
-        <textarea id="masteryMilestones" class="mt-1 p-2 w-full border rounded" rows="3" placeholder="e.g., Peak performance"></textarea>
-    </div>
-</div>
-
-                <div class="flex gap-4 mt-4">
-                    <button type="button" id="previewBtn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Preview Plan</button>
-                    <button type="button" id="saveBtn" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Save Plan</button>
-                    <button type="button" id="loadBtn" class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">Load Plan</button>
-                    <input type="file" id="uploadPlan" accept=".json" style="display:none;">
-                </div>
-            </div>
-        </section>
-
-        <!-- Output Section -->
-        <section id="planOutput" class="print-only hidden">
-            <h2 class="text-xl font-semibold mb-4">Workout Plan for <span id="outClientName"></span></h2>
-            <p><strong>Goal:</strong> <span id="outGoal"></span></p>
-            <p><strong>Total Weeks:</strong> <span id="outTotalWeeks"></span></p>
-            <p><strong>Training Days:</strong> <span id="outDays"></span></p>
-            <div id="outPhases" class="mt-6"></div>
-            <button id="printBtn" class="no-print bg-gray-200 px-4 py-2 rounded mt-4" onclick="window.print()">Print Plan</button>
-        </section>
-
-        <footer class="mt-8 border-t pt-4 text-center text-sm text-gray-600">
-            <p>Contact: adi@malihi.ca | Generated by Adi Malihi</p>
-        </footer>
+    <div id="workout-content"></div>
+    <div class="export">
+        <button id="finish-workout">Finish Workout & Export</button>
+        <textarea id="export-text" class="hidden"></textarea>
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const phases = ['foundation', 'evolution', 'mastery'];
+        const workoutPlan = {
+            monday: [
+                { name: 'Machine Chest Press (Myo-reps)', warmUp: '2-3', working: 2, reps: '6-8', rpe: '8-9', rest: '2-3 min', subs: ['Bench Press', 'Flat Dumbbell Press'], note: 'Focus on chest activation; increase weight if RPE <8.' },
+                { name: 'Supported T-Bar Row (Lengthened Partials)', warmUp: '2-3', working: 2, reps: '6-8', rpe: '7-8', rest: '2-3 min', subs: ['Barbell Row', 'Dumbbell Row'], note: 'Keep back straight; log RPE for overload.' },
+                { name: 'Dumbbell Lateral Raise (Lengthened Partials)', warmUp: '0-1', working: 2, reps: '6-8', rpe: '8-9', rest: '30 sec', subs: ['Cable Lateral Raise'], note: 'Superset with Lat Pulldown; slow eccentric.' },
+                { name: 'Lat Pulldown', warmUp: '1-2', working: 2, reps: '8-10', rpe: '7-8', rest: '30 sec', subs: ['Pull-Up'], note: 'Full range for back development.' },
+                { name: 'Pec Deck (Droplet)', warmUp: '0-1', working: 2, reps: '8-10', rpe: '8-9', rest: '1-2 min', subs: ['Dumbbell Fly'], note: 'Slow eccentric; drop weight if reps drop.' },
+                { name: 'Preacher Curl (Droplet)', warmUp: '0-1', working: 2, reps: '8-10', rpe: '8-9', rest: '30 sec', subs: ['Biceps Curl'], note: 'Superset with Skullcrusher.' },
+                { name: 'EZ-Bar Skullcrusher (Droplet)', warmUp: '0-1', working: 2, reps: '8-10', rpe: '8-9', rest: '30 sec', subs: ['Overhead Triceps Extension'], note: 'Controlled motion to avoid elbow strain.' }
+            ],
+            tuesday: [
+                { name: 'Barbell Romanian Deadlift', warmUp: '2-3', working: 3, reps: '8-10', rpe: '6-7', rest: '2-3 min', subs: ['Dumbbell Romanian Deadlift'], note: 'Hinge at hips; increase if RPE <7.' },
+                { name: 'Leg Press', warmUp: '2-3', working: 3, reps: '6-8', rpe: '7-8', rest: '2-3 min', subs: ['Hack Squat'], note: 'Full depth for quads.' },
+                { name: 'Glute Ham Raise (Lengthened Set)', warmUp: '1-2', working: 2, reps: '8-10', rpe: '7-8', rest: '2-3 min', subs: ['Lying Leg Curl'], note: 'Squeeze glutes at top.' },
+                { name: 'Seated Calf Raise', warmUp: '0-1', working: 3, reps: '8-10', rpe: '8-9', rest: '30 sec', subs: ['Standing Calf Raise'], note: 'Superset with Cable Crunch.' },
+                { name: 'Cable Crunch', warmUp: '0-1', working: 3, reps: '10-12', rpe: '8-9', rest: '30 sec', subs: ['Decline Sit-Up'], note: 'Controlled reps for abs.' }
+            ],
+            wednesday: [
+                { name: 'Cable Upright Row', warmUp: '2-3', working: 3, reps: '8-10', rpe: '7-8', rest: '2-3 min', subs: ['Dumbbell Shoulder Press'], note: 'Controlled motion.' },
+                { name: 'Flat Dumbbell Press', warmUp: '1-2', working: 3, reps: '10-12', rpe: '7-8', rest: '2-3 min', subs: ['Bench Press'], note: 'Full chest stretch.' },
+                { name: 'Lateral Raise', warmUp: '0-1', working: 3, reps: '12-15', rpe: '8-9', rest: '1-2 min', subs: ['Machine Lateral Raise'], note: 'Slow negatives.' },
+                { name: 'Cable Fly', warmUp: '0-1', working: 3, reps: '12-15', rpe: '8-9', rest: '1-2 min', subs: ['Dumbbell Fly'], note: 'Focus on pec contraction.' },
+                { name: 'Overhead Triceps Extension', warmUp: '0-1', working: 3, reps: '15-20', rpe: '8-9', rest: '1-2 min', subs: ['EZ-Bar Skullcrusher'], note: 'Elbow alignment.' }
+            ],
+            thursday: [
+                { name: 'Lat Pulldown (Lengthened Partials)', warmUp: '1-2', working: 3, reps: '10-12', rpe: '7-8', rest: '2-3 min', subs: ['Pull-Up'], note: 'Full range.' },
+                { name: 'Dumbbell Row', warmUp: '1-2', working: 3, reps: '10-12', rpe: '7-8', rest: '2-3 min', subs: ['T-Bar Row'], note: 'Squeeze back.' },
+                { name: 'Cable Lat Pull-In', warmUp: '0-1', working: 3, reps: '12-15', rpe: '8-9', rest: '1-2 min', subs: ['Reverse Pec Deck'], note: 'Rear delt focus.' },
+                { name: 'Reverse Pec Deck', warmUp: '0-1', working: 3, reps: '12-15', rpe: '8-9', rest: '1-2 min', subs: ['Face Pull'], note: 'High reps for burn.' },
+                { name: 'Biceps Curl', warmUp: '0-1', working: 3, reps: '15-20', rpe: '8-9', rest: '1-2 min', subs: ['Preacher Curl'], note: 'Controlled eccentric.' }
+            ],
+            friday: [
+                { name: 'Hack Squat', warmUp: '2-3', working: 3, reps: '8-10', rpe: '7-8', rest: '2-3 min', subs: ['Leg Press'], note: 'Deep stance.' },
+                { name: 'Leg Extension (Lengthened Set)', warmUp: '1-2', working: 2, reps: '12-15', rpe: '7-8', rest: '1-2 min', subs: ['Goblet Squat'], note: 'Quad burn.' },
+                { name: 'Seated Leg Curl (Lengthened Set)', warmUp: '1-2', working: 2, reps: '12-15', rpe: '7-8', rest: '1-2 min', subs: ['Lying Leg Curl'], note: 'Hamstring squeeze.' },
+                { name: 'Standing Calf Raise', warmUp: '0-1', working: 3, reps: '15-20', rpe: '8-9', rest: '30 sec', subs: ['Seated Calf Raise'], note: 'Superset with Leg Raise.' },
+                { name: 'Roman Chair Leg Raise', warmUp: '0-1', working: 3, reps: '10-20', rpe: '8-9', rest: '30 sec', subs: ['Hanging Leg Raise'], note: 'Core engagement.' }
+            ],
+            saturday: [
+                { name: '1-Mile Run', warmUp: '0', working: 1, reps: '1 mile', rpe: 'varies', rest: 'no rest', subs: [], note: 'Pace yourself for partitions.' },
+                { name: 'Pull-Ups', warmUp: '0', working: 1, reps: '100 reps partitioned', rpe: 'varies', rest: 'no rest', subs: [], note: 'Partition in 5-10 reps.' },
+                { name: 'Push-Ups', warmUp: '0', working: 1, reps: '200 reps partitioned', rpe: 'varies', rest: 'no rest', subs: [], note: 'Keep form tight.' },
+                { name: 'Squats', warmUp: '0', working: 1, reps: '300 reps partitioned', rpe: 'varies', rest: 'no rest', subs: [], note: 'Bodyweight air squats.' },
+                { name: '1-Mile Run', warmUp: '0', working: 1, reps: '1 mile', rpe: 'varies', rest: 'no rest', subs: [], note: 'Finish strong.' }
+            ],
+            sunday: [
+                { name: '5k Run', warmUp: '0', working: 1, reps: '5k', rpe: 'moderate (5-6)', rest: 'no rest', subs: [], note: 'Moderate pace, add intervals if energy allows.' }
+            ]
+        };
 
-            // Add Exercise
-            document.querySelectorAll('.add-exercise').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const phase = btn.dataset.phase;
-                    const container = document.getElementById(`${phase}Exercises`);
-                    const row = document.createElement('div');
-                    row.className = 'exercise-row';
-                    row.innerHTML = `
-                        <input type="text" class="p-2 border rounded" placeholder="Exercise" required>
-                        <input type="number" class="p-2 border rounded" placeholder="Sets" min="1">
-                        <input type="text" class="p-2 border rounded" placeholder="Reps">
-                        <input type="text" class="p-2 border rounded" placeholder="RIR">
-                        <input type="text" class="p-2 border rounded" placeholder="RPE">
-                        <input type="text" class="p-2 border rounded" placeholder="Rest">
-                        <button type="button" class="remove-exercise text-red-600">×</button>
-                    `;
-                    container.appendChild(row);
-                });
-            });
+        const notesRecommendations = `
+Warm-Up: Start each session with 5 minutes of light cardio (e.g., treadmill walk) and dynamic stretches (e.g., arm circles, leg swings).
 
-            // Remove Exercise
-            document.addEventListener('click', (e) => {
-                if (e.target.classList.contains('remove-exercise')) {
-                    e.target.parentElement.remove();
-                }
-            });
+Progression: Increase weight by 2.5-5% when Last Set RPE ≤8 and reps are completed, as per your plan's intent. Log weights/reps in a notebook or app to track.
 
-            // Get Plan Data
-            function getPlanData() {
-                const clientName = document.getElementById('clientName').value.trim();
-                const goal = document.getElementById('clientGoal').value.trim();
-                const trainingDays = Array.from(document.querySelectorAll('input[name="days"]:checked')).map(cb => cb.value);
-                const phasesData = {};
-                phases.forEach(phase => {
-                    const weeks = parseInt(document.getElementById(`${phase}Weeks`).value) || 0;
-                    const exercises = Array.from(document.querySelectorAll(`#${phase}Exercises .exercise-row`)).map(row => {
-                        const inputs = row.querySelectorAll('input');
-                        return {
-                            name: inputs[0].value.trim(),
-                            sets: inputs[1].value.trim(),
-                            reps: inputs[2].value.trim(),
-                            rir: inputs[3].value.trim(),
-                            rpe: inputs[4].value.trim(),
-                            rest: inputs[5].value.trim()
-                        };
-                    }).filter(ex => ex.name);
-                    const milestones = document.getElementById(`${phase}Milestones`).value.trim();
-                   if (exercises.length > 0 && weeks > 0) {
-    phasesData[phase] = {
-        weeks,
-        exercises,
-        milestones,
-        description: document.getElementById(`${phase}Description`).value.trim()
-    };
-}
-                });
-                return { clientName, goal, trainingDays, phases: phasesData };
-            }
+Rest Periods: Adhere to 30-90 seconds as specified—short rests on supersets enhance metabolic stress for hypertrophy.
 
-            // Preview Plan
-            document.getElementById('previewBtn').addEventListener('click', () => {
-                const plan = getPlanData();
-                if (!plan.clientName || !plan.goal || plan.trainingDays.length < 1 || Object.keys(plan.phases).length === 0) {
-                    alert('Please fill all required fields and add at least one exercise with weeks.');
-                    return;
-                }
-                const totalWeeks = Object.values(plan.phases).reduce((sum, p) => sum + p.weeks, 0);
-                document.getElementById('outClientName').textContent = plan.clientName;
-                document.getElementById('outGoal').textContent = plan.goal;
-                document.getElementById('outTotalWeeks').textContent = totalWeeks;
-                document.getElementById('outDays').textContent = plan.trainingDays.join(', ');
-                const outPhases = document.getElementById('outPhases');
-                outPhases.innerHTML = '';
-                let weekStart = 1;
-                for (const phase in plan.phases) {
-                    const p = plan.phases[phase];
-                    const phaseDiv = document.createElement('div');
-                    phaseDiv.className = 'phase-box';
-                    const weekRange = `Weeks ${weekStart}-${weekStart + p.weeks - 1}`;
-                   phaseDiv.innerHTML = `
-    <h3 class="text-lg font-medium">${phase.charAt(0).toUpperCase() + phase.slice(1)} Phase (${weekRange})</h3>
-    ${p.description ? `<p><strong>Description:</strong> ${p.description}</p>` : ''}
-    <p><strong>Training Days:</strong> ${plan.trainingDays.join(', ')}</p>
-    <table class="w-full border-collapse mt-2">
-                            <thead>
-                                <tr class="bg-blue-100">
-                                    <th class="p-2 border">Exercise</th>
-                                    <th class="p-2 border">Sets</th>
-                                    <th class="p-2 border">Reps</th>
-                                    <th class="p-2 border">RIR</th>
-                                    <th class="p-2 border">RPE</th>
-                                    <th class="p-2 border">Rest</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${p.exercises.map(ex => `
-                                    <tr>
-                                        <td class="p-2 border">${ex.name}</td>
-                                        <td class="p-2 border text-center">${ex.sets}</td>
-                                        <td class="p-2 border text-center">${ex.reps}</td>
-                                        <td class="p-2 border text-center">${ex.rir}</td>
-                                        <td class="p-2 border text-center">${ex.rpe}</td>
-                                        <td class="p-2 border text-center">${ex.rest}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                        <div class="milestones">
-                            <label class="block text-sm font-medium mt-4">Results & Key Milestones</label>
-                            <p>${p.milestones || 'No milestones set'}</p>
-                        </div>
-                    `;
-                    outPhases.appendChild(phaseDiv);
-                    weekStart += p.weeks;
-                }
-                document.getElementById('planOutput').classList.remove('hidden');
-            });
+Substitutions: Use alternatives (e.g., Dumbbell Press for Bench Press) if equipment is unavailable, especially during travel.
 
-            // Save Plan
-            document.getElementById('saveBtn').addEventListener('click', () => {
-                const plan = getPlanData();
-                if (!plan.clientName || !plan.goal || plan.trainingDays.length < 1 || Object.keys(plan.phases).length === 0) {
-                    alert('Please fill all required fields before saving.');
-                    return;
-                }
-                const jsonStr = JSON.stringify(plan, null, 2);
-                const blob = new Blob([jsonStr], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `workout_plan_${plan.clientName.replace(/\s/g, '_')}_${new Date().toISOString().slice(0, 10)}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-            });
+Recovery: With no rest days, monitor fatigue—your family stress (kids, marriage) increases cortisol risk. Ashwagandha (600 mg/day) and omega-3 (1500 mg EPA/DHA) help; add 10-minute meditation daily.
 
-        document.getElementById('loadBtn').addEventListener('click', () => {
-        document.getElementById('uploadPlan').click();
-    });
+Nutrition: Maintain 180-220 g protein, cycle carbs (200 g on U/P/L days, 150 g on Murph/5k), and 2,300-2,500 cal. HMB (3 g/day, 1 g pre, 1 g post, 1 g dinner) supports growth—buy from Canadian Protein.
+        `;
 
-    document.getElementById('uploadPlan').addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                try {
-                    const plan = JSON.parse(event.target.result);
-                    document.getElementById('clientName').value = plan.clientName || '';
-                    document.getElementById('clientGoal').value = plan.goal || '';
-                    document.querySelectorAll('input[name="days"]').forEach(cb => {
-                        cb.checked = plan.trainingDays && plan.trainingDays.includes(cb.value);
-                    });
-                    phases.forEach(phase => {
-                        const phaseData = plan.phases && plan.phases[phase];
-                        document.getElementById(`${phase}Weeks`).value = phaseData ? phaseData.weeks || '' : '';
-                        const container = document.getElementById(`${phase}Exercises`);
-                        container.innerHTML = '';
-                        if (phaseData && phaseData.exercises) {
-                            phaseData.exercises.forEach(ex => {
-                                const row = document.createElement('div');
-                                row.className = 'exercise-row';
-                                row.innerHTML = `
-                                    <input type="text" class="p-2 border rounded" value="${ex.name || ''}" required>
-                                    <input type="number" class="p-2 border rounded" value="${ex.sets || ''}" min="1">
-                                    <input type="text" class="p-2 border rounded" value="${ex.reps || ''}">
-                                    <input type="text" class="p-2 border rounded" value="${ex.rir || ''}">
-                                    <input type="text" class="p-2 border rounded" value="${ex.rpe || ''}">
-                                    <input type="text" class="p-2 border rounded" value="${ex.rest || ''}">
-                                    <button type="button" class="remove-exercise text-red-600">×</button>
-                                `;
-                                container.appendChild(row);
-                            });
-                        }
-                        document.getElementById(`${phase}Milestones`).value = phaseData ? phaseData.milestones || '' : '';
-                    });
-                    phases.forEach(phase => {
-    if (plan.phases && plan.phases[phase] && plan.phases[phase].description) {
-        document.getElementById(`${phase}Description`).value = plan.phases[phase].description;
-    }
-});
-                } catch (error) {
-                    alert('Invalid plan file. Please upload a valid JSON file.');
-                }
-            };
-            reader.readAsText(file);
+        let currentDay = 'monday';
+        let workoutData = loadData();
+
+        function loadData() {
+            const saved = localStorage.getItem('workoutData');
+            return saved ? JSON.parse(saved) : {};
         }
-    });
-});
+
+        function saveData() {
+            localStorage.setItem('workoutData', JSON.stringify(workoutData));
+        }
+
+        function renderWorkout(day) {
+            currentDay = day;
+            const content = document.getElementById('workout-content');
+            content.innerHTML = '';
+            document.querySelectorAll('.day-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`[data-day="${day}"]`).classList.add('active');
+
+            const exercises = workoutPlan[day];
+            exercises.forEach((ex, exIndex) => {
+                const exDiv = document.createElement('div');
+                exDiv.className = 'exercise';
+                exDiv.innerHTML = `
+                    <h3>${ex.name}</h3>
+                    <p><strong>Reps:</strong> ${ex.reps} | <strong>RPE:</strong> ${ex.rpe} | <strong>Rest:</strong> ${ex.rest}</p>
+                    <p><strong>Substitutions:</strong> ${ex.subs.join(', ') || 'None'}</p>
+                    <p><strong>Note:</strong> ${ex.note}</p>
+                    <div class="sets">
+                        <h4>Warm-Up Sets (${ex.warmUp})</h4>
+                        <div id="warmup-sets-${exIndex}"></div>
+                        <button class="add-set" onclick="addSet(${exIndex}, 'warmup')">Add Warm-Up Set</button>
+                        <h4>Working Sets (${ex.working})</h4>
+                        <div id="working-sets-${exIndex}"></div>
+                        <button class="add-set" onclick="addSet(${exIndex}, 'working')">Add Working Set</button>
+                    </div>
+                `;
+                content.appendChild(exDiv);
+            });
+
+            const notesDiv = document.createElement('div');
+            notesDiv.className = 'exercise';
+            notesDiv.innerHTML = `<h3>Notes and Recommendations</h3><pre>${notesRecommendations}</pre>`;
+            content.appendChild(notesDiv);
+
+            // Render existing sets
+            if (!workoutData[day]) workoutData[day] = [];
+            exercises.forEach((_, exIndex) => {
+                if (!workoutData[day][exIndex]) workoutData[day][exIndex] = { warmup: [], working: [] };
+                renderSets(exIndex, 'warmup');
+                renderSets(exIndex, 'working');
+            });
+        }
+
+        function addSet(exIndex, type) {
+            const ex = workoutPlan[currentDay][exIndex];
+            const sets = workoutData[currentDay][exIndex][type];
+            const rangeStr = type === 'warmup' ? ex.warmUp : ex.working.toString();
+            const [min, max] = rangeStr.split('-').map(Number);
+            const maxSets = max || min;
+
+            if (sets.length < maxSets) {
+                let newSet = { weight: '', reps: '', done: false };
+                if (sets.length > 0) {
+                    const lastSet = sets[sets.length - 1];
+                    newSet.weight = lastSet.weight;
+                    newSet.reps = lastSet.reps;
+                }
+                sets.push(newSet);
+                renderSets(exIndex, type);
+                saveData();
+            }
+        }
+
+        function renderSets(exIndex, type) {
+            const container = document.getElementById(`${type}-sets-${exIndex}`);
+            container.innerHTML = '';
+            const sets = workoutData[currentDay][exIndex][type];
+            sets.forEach((set, setIndex) => {
+                const setDiv = document.createElement('div');
+                setDiv.className = 'set';
+                setDiv.innerHTML = `
+                    <input type="number" placeholder="Weight" value="${set.weight}" oninput="updateSet(${exIndex}, '${type}', ${setIndex}, 'weight', this.value)">
+                    <input type="number" placeholder="Reps" value="${set.reps}" oninput="updateSet(${exIndex}, '${type}', ${setIndex}, 'reps', this.value)">
+                    <button class="${set.done ? 'done' : ''}" onclick="toggleDone(${exIndex}, '${type}', ${setIndex})">${set.done ? 'Undo' : 'Done'}</button>
+                    <div class="timer">
+                        <button onclick="startTimer(${exIndex}, ${setIndex}, '${type}')">Start Rest Timer</button>
+                        <span id="timer-${type}-${exIndex}-${setIndex}"></span>
+                    </div>
+                `;
+                container.appendChild(setDiv);
+            });
+        }
+
+        function updateSet(exIndex, type, setIndex, field, value) {
+            workoutData[currentDay][exIndex][type][setIndex][field] = value;
+            saveData();
+        }
+
+        function toggleDone(exIndex, type, setIndex) {
+            const set = workoutData[currentDay][exIndex][type][setIndex];
+            set.done = !set.done;
+            renderSets(exIndex, type);
+            saveData();
+        }
+
+        function startTimer(exIndex, setIndex, type) {
+            const ex = workoutPlan[currentDay][exIndex];
+            const rest = ex.rest;
+            if (rest === 'no rest' || rest === 'varies') return; // Skip if no rest
+
+            // Parse rest time, assume min if range
+            let time = parseInt(rest.split('-')[0]) * 60; // in seconds, take min
+            if (rest.includes('sec')) time = parseInt(rest.split('-')[0]);
+            const timerSpan = document.getElementById(`timer-${type}-${exIndex}-${setIndex}`);
+            const interval = setInterval(() => {
+                timerSpan.textContent = `${Math.floor(time / 60)}:${time % 60 < 10 ? '0' : ''}${time % 60}`;
+                if (time <= 0) {
+                    clearInterval(interval);
+                    timerSpan.textContent = 'Rest Over!';
+                }
+                time--;
+            }, 1000);
+        }
+
+        function exportWorkout() {
+            let text = `Workout Day: ${currentDay.charAt(0).toUpperCase() + currentDay.slice(1)}\n\n`;
+            workoutPlan[currentDay].forEach((ex, exIndex) => {
+                text += `${ex.name}\n`;
+                const data = workoutData[currentDay][exIndex];
+                if (data.warmup.length > 0) {
+                    text += 'Warm-Up Sets:\n';
+                    data.warmup.forEach((set, i) => text += `Set ${i+1}: ${set.weight} x ${set.reps} ${set.done ? '(Done)' : ''}\n`);
+                }
+                if (data.working.length > 0) {
+                    text += 'Working Sets:\n';
+                    data.working.forEach((set, i) => text += `Set ${i+1}: ${set.weight} x ${set.reps} ${set.done ? '(Done)' : ''}\n`);
+                }
+                text += '\n';
+            });
+            const textarea = document.getElementById('export-text');
+            textarea.value = text;
+            textarea.classList.remove('hidden');
+            // Optional: copy to clipboard
+            textarea.select();
+            document.execCommand('copy');
+            alert('Exported to text! Copied to clipboard.');
+            // Reset data if desired
+            // workoutData[currentDay] = [];
+            // saveData();
+            // renderWorkout(currentDay);
+        }
+
+        document.querySelectorAll('.day-button').forEach(btn => {
+            btn.addEventListener('click', () => renderWorkout(btn.dataset.day));
+        });
+
+        document.getElementById('finish-workout').addEventListener('click', exportWorkout);
+
+        // Initial render
+        renderWorkout('monday');
     </script>
 </body>
 </html>
